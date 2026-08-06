@@ -1,1 +1,2 @@
-certifi
+ada92cb5d92a588d1b93__mypyc
+charset_normalizer
