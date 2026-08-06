@@ -1,314 +1,245 @@
-import sys
-
+import random
+from collections.abc import Callable, Iterator, MutableMapping, Sequence
+from contextlib import AbstractContextManager
 from typing import (
     Any,
-    Callable,
-    Mapping,
-    Sequence,
-    overload,
+    Concatenate,
+    Final,
+    Generic,
+    Literal,
+    NamedTuple,
+    ParamSpec,
+    Protocol,
     TypeVar,
+    overload,
+    type_check_only,
 )
 
-# Because we need to type our own stuff, we have to make everything from
-# attr explicitly public too.
-from attr import __author__ as __author__
-from attr import __copyright__ as __copyright__
-from attr import __description__ as __description__
-from attr import __email__ as __email__
-from attr import __license__ as __license__
-from attr import __title__ as __title__
-from attr import __url__ as __url__
-from attr import __version__ as __version__
-from attr import __version_info__ as __version_info__
-from attr import assoc as assoc
-from attr import Attribute as Attribute
-from attr import AttrsInstance as AttrsInstance
-from attr import cmp_using as cmp_using
-from attr import converters as converters
-from attr import Converter as Converter
-from attr import evolve as evolve
-from attr import exceptions as exceptions
-from attr import Factory as Factory
-from attr import fields as fields
-from attr import fields_dict as fields_dict
-from attr import filters as filters
-from attr import has as has
-from attr import make_class as make_class
-from attr import NOTHING as NOTHING
-from attr import resolve_types as resolve_types
-from attr import setters as setters
-from attr import validate as validate
-from attr import validators as validators
-from attr import attrib, asdict as asdict, astuple as astuple
-from attr import NothingType as NothingType
+__all__: Final = (
+    "Cache",
+    "FIFOCache",
+    "LFUCache",
+    "LRUCache",
+    "RRCache",
+    "TLRUCache",
+    "TTLCache",
+    "cached",
+    "cachedmethod",
+)
+__version__: str
 
-if sys.version_info >= (3, 11):
-    from typing import dataclass_transform
-else:
-    from typing_extensions import dataclass_transform
-
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 _T = TypeVar("_T")
-_C = TypeVar("_C", bound=type)
+_KT = TypeVar("_KT")
+_VT = TypeVar("_VT")
+_TT = TypeVar("_TT", default=float)
+_KT2 = TypeVar("_KT2")
+_VT2 = TypeVar("_VT2")
 
-_EqOrderType = bool | Callable[[Any], Any]
-_ValidatorType = Callable[[Any, "Attribute[_T]", _T], Any]
-_CallableConverterType = Callable[[Any], Any]
-_ConverterType = _CallableConverterType | Converter[Any, Any]
-_ReprType = Callable[[Any], str]
-_ReprArgType = bool | _ReprType
-_OnSetAttrType = Callable[[Any, "Attribute[Any]", Any], Any]
-_OnSetAttrArgType = _OnSetAttrType | list[_OnSetAttrType] | setters._NoOpType
-_FieldTransformer = Callable[
-    [type, list["Attribute[Any]"]], list["Attribute[Any]"]
-]
-# FIXME: in reality, if multiple validators are passed they must be in a list
-# or tuple, but those are invariant and so would prevent subtypes of
-# _ValidatorType from working when passed in a list or tuple.
-_ValidatorArgType = _ValidatorType[_T] | Sequence[_ValidatorType[_T]]
+class Cache(MutableMapping[_KT, _VT]):
+    def __init__(
+        self, maxsize: float, getsizeof: Callable[[_VT], float] | None = None
+    ) -> None: ...
+    def __getitem__(self, key: _KT) -> _VT: ...
+    def __setitem__(self, key: _KT, value: _VT) -> None: ...
+    def __delitem__(self, key: _KT) -> None: ...
+    def __missing__(self, key: _KT) -> _VT: ...
+    def __iter__(self) -> Iterator[_KT]: ...
+    def __len__(self) -> int: ...
+    @overload
+    def pop(self, key: _KT) -> _VT: ...
+    @overload
+    def pop(self, key: _KT, default: _VT | _T) -> _VT | _T: ...
+    def setdefault(self, key: _KT, default: _VT | None = None) -> _VT: ...
+    @property
+    def maxsize(self) -> float: ...
+    @property
+    def currsize(self) -> float: ...
+    @staticmethod
+    def getsizeof(value: _VT) -> float: ...
 
-@overload
-def field(
-    *,
-    default: None = ...,
-    validator: None = ...,
-    repr: _ReprArgType = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    metadata: Mapping[Any, Any] | None = ...,
-    converter: None = ...,
-    factory: None = ...,
-    kw_only: bool | None = ...,
-    eq: bool | None = ...,
-    order: bool | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    alias: str | None = ...,
-    type: type | None = ...,
-) -> Any: ...
+class FIFOCache(Cache[_KT, _VT]): ...
+class LFUCache(Cache[_KT, _VT]): ...
+class LRUCache(Cache[_KT, _VT]): ...
 
-# This form catches an explicit None or no default and infers the type from the
-# other arguments.
-@overload
-def field(
-    *,
-    default: None = ...,
-    validator: _ValidatorArgType[_T] | None = ...,
-    repr: _ReprArgType = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    metadata: Mapping[Any, Any] | None = ...,
-    converter: _ConverterType
-    | list[_ConverterType]
-    | tuple[_ConverterType, ...]
-    | None = ...,
-    factory: Callable[[], _T] | None = ...,
-    kw_only: bool | None = ...,
-    eq: _EqOrderType | None = ...,
-    order: _EqOrderType | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    alias: str | None = ...,
-    type: type | None = ...,
-) -> _T: ...
-
-# This form catches an explicit default argument.
-@overload
-def field(
-    *,
-    default: _T,
-    validator: _ValidatorArgType[_T] | None = ...,
-    repr: _ReprArgType = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    metadata: Mapping[Any, Any] | None = ...,
-    converter: _ConverterType
-    | list[_ConverterType]
-    | tuple[_ConverterType, ...]
-    | None = ...,
-    factory: Callable[[], _T] | None = ...,
-    kw_only: bool | None = ...,
-    eq: _EqOrderType | None = ...,
-    order: _EqOrderType | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    alias: str | None = ...,
-    type: type | None = ...,
-) -> _T: ...
-
-# This form covers type=non-Type: e.g. forward references (str), Any
-@overload
-def field(
-    *,
-    default: _T | None = ...,
-    validator: _ValidatorArgType[_T] | None = ...,
-    repr: _ReprArgType = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    metadata: Mapping[Any, Any] | None = ...,
-    converter: _ConverterType
-    | list[_ConverterType]
-    | tuple[_ConverterType, ...]
-    | None = ...,
-    factory: Callable[[], _T] | None = ...,
-    kw_only: bool | None = ...,
-    eq: _EqOrderType | None = ...,
-    order: _EqOrderType | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    alias: str | None = ...,
-    type: type | None = ...,
-) -> Any: ...
-@overload
-@dataclass_transform(field_specifiers=(attrib, field))
-def define(
-    maybe_cls: _C,
-    *,
-    these: dict[str, Any] | None = ...,
-    repr: bool = ...,
-    unsafe_hash: bool | None = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    slots: bool = ...,
-    frozen: bool = ...,
-    weakref_slot: bool = ...,
-    str: bool = ...,
-    auto_attribs: bool = ...,
-    kw_only: bool = ...,
-    cache_hash: bool = ...,
-    auto_exc: bool = ...,
-    eq: bool | None = ...,
-    order: bool | None = ...,
-    auto_detect: bool = ...,
-    getstate_setstate: bool | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    field_transformer: _FieldTransformer | None = ...,
-    match_args: bool = ...,
-) -> _C: ...
-@overload
-@dataclass_transform(field_specifiers=(attrib, field))
-def define(
-    maybe_cls: None = ...,
-    *,
-    these: dict[str, Any] | None = ...,
-    repr: bool = ...,
-    unsafe_hash: bool | None = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    slots: bool = ...,
-    frozen: bool = ...,
-    weakref_slot: bool = ...,
-    str: bool = ...,
-    auto_attribs: bool = ...,
-    kw_only: bool = ...,
-    cache_hash: bool = ...,
-    auto_exc: bool = ...,
-    eq: bool | None = ...,
-    order: bool | None = ...,
-    auto_detect: bool = ...,
-    getstate_setstate: bool | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    field_transformer: _FieldTransformer | None = ...,
-    match_args: bool = ...,
-) -> Callable[[_C], _C]: ...
-
-mutable = define
-
-@overload
-@dataclass_transform(frozen_default=True, field_specifiers=(attrib, field))
-def frozen(
-    maybe_cls: _C,
-    *,
-    these: dict[str, Any] | None = ...,
-    repr: bool = ...,
-    unsafe_hash: bool | None = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    slots: bool = ...,
-    frozen: bool = ...,
-    weakref_slot: bool = ...,
-    str: bool = ...,
-    auto_attribs: bool = ...,
-    kw_only: bool = ...,
-    cache_hash: bool = ...,
-    auto_exc: bool = ...,
-    eq: bool | None = ...,
-    order: bool | None = ...,
-    auto_detect: bool = ...,
-    getstate_setstate: bool | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    field_transformer: _FieldTransformer | None = ...,
-    match_args: bool = ...,
-) -> _C: ...
-@overload
-@dataclass_transform(frozen_default=True, field_specifiers=(attrib, field))
-def frozen(
-    maybe_cls: None = ...,
-    *,
-    these: dict[str, Any] | None = ...,
-    repr: bool = ...,
-    unsafe_hash: bool | None = ...,
-    hash: bool | None = ...,
-    init: bool = ...,
-    slots: bool = ...,
-    frozen: bool = ...,
-    weakref_slot: bool = ...,
-    str: bool = ...,
-    auto_attribs: bool = ...,
-    kw_only: bool = ...,
-    cache_hash: bool = ...,
-    auto_exc: bool = ...,
-    eq: bool | None = ...,
-    order: bool | None = ...,
-    auto_detect: bool = ...,
-    getstate_setstate: bool | None = ...,
-    on_setattr: _OnSetAttrArgType | None = ...,
-    field_transformer: _FieldTransformer | None = ...,
-    match_args: bool = ...,
-) -> Callable[[_C], _C]: ...
-
-class ClassProps:
-    # XXX: somehow when defining/using enums Mypy starts looking at our own
-    # (untyped) code and causes tons of errors.
-    Hashability: Any
-    KeywordOnly: Any
-
-    is_exception: bool
-    is_slotted: bool
-    has_weakref_slot: bool
-    is_frozen: bool
-    # kw_only: ClassProps.KeywordOnly
-    kw_only: Any
-    collected_fields_by_mro: bool
-    added_init: bool
-    added_repr: bool
-    added_eq: bool
-    added_ordering: bool
-    # hashability: ClassProps.Hashability
-    hashability: Any
-    added_match_args: bool
-    added_str: bool
-    added_pickling: bool
-    on_setattr_hook: _OnSetAttrType | None
-    field_transformer: Callable[[Attribute[Any]], Attribute[Any]] | None
-
+class RRCache(Cache[_KT, _VT]):
     def __init__(
         self,
-        is_exception: bool,
-        is_slotted: bool,
-        has_weakref_slot: bool,
-        is_frozen: bool,
-        # kw_only: ClassProps.KeywordOnly
-        kw_only: Any,
-        collected_fields_by_mro: bool,
-        added_init: bool,
-        added_repr: bool,
-        added_eq: bool,
-        added_ordering: bool,
-        # hashability: ClassProps.Hashability
-        hashability: Any,
-        added_match_args: bool,
-        added_str: bool,
-        added_pickling: bool,
-        on_setattr_hook: _OnSetAttrType,
-        field_transformer: Callable[[Attribute[Any]], Attribute[Any]],
+        maxsize: float,
+        choice: Callable[[Sequence[_KT]], _KT] = random.choice,
+        getsizeof: Callable[[_VT], float] | None = None,
     ) -> None: ...
     @property
-    def is_hashable(self) -> bool: ...
+    def choice(self) -> Callable[[Sequence[_KT]], _KT]: ...
 
-def inspect(cls: type) -> ClassProps: ...
+class _TimedCache(Cache[_KT, _VT], Generic[_KT, _VT, _TT]):
+    def __init__(
+        self,
+        maxsize: float,
+        timer: Callable[[], _TT],
+        getsizeof: Callable[[_VT], float] | None = None,
+    ) -> None: ...
+
+    class _Timer(AbstractContextManager[_T]):
+        def __init__(self, timer: Callable[[], _T]) -> None: ...
+        def __call__(self) -> _T: ...
+        def __enter__(self) -> _T: ...
+        def __exit__(self, *exc: object) -> None: ...
+        def __getattr__(self, name: str) -> Any: ...
+
+    @property
+    def timer(self) -> _Timer[_TT]: ...
+
+class TTLCache(_TimedCache[_KT, _VT, _TT]):
+    @overload
+    def __init__(
+        self: TTLCache[_KT2, _VT2, float],
+        maxsize: float,
+        ttl: float,
+        *,
+        getsizeof: Callable[[_VT2], float] | None = None,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        maxsize: float,
+        ttl: Any,  # FIXME: must be "addable" to _TT
+        timer: Callable[[], _TT],
+        getsizeof: Callable[[_VT], float] | None = None,
+    ) -> None: ...
+    @property
+    def ttl(self) -> Any: ...
+    def expire(self, time: _TT | None = None) -> list[tuple[_KT, _VT]]: ...
+
+class TLRUCache(_TimedCache[_KT, _VT, _TT]):
+    @overload
+    def __init__(
+        self: TLRUCache[_KT2, _VT2, float],
+        maxsize: float,
+        ttu: Callable[[_KT2, _VT2, float], float],
+        *,
+        getsizeof: Callable[[_VT2], float] | None = None,
+    ) -> None: ...
+    @overload
+    def __init__(
+        self,
+        maxsize: float,
+        ttu: Callable[[_KT, _VT, _TT], _TT],
+        timer: Callable[[], _TT],
+        getsizeof: Callable[[_VT], float] | None = None,
+    ) -> None: ...
+    @property
+    def ttu(self) -> Callable[[_KT, _VT, _TT], _TT]: ...
+    def expire(self, time: _TT | None = None) -> list[tuple[_KT, _VT]]: ...
+
+class _CacheInfo(NamedTuple):
+    hits: int
+    misses: int
+    maxsize: float | None
+    currsize: float
+
+@type_check_only
+class _AbstractCondition(AbstractContextManager[Any], Protocol):
+    # implementation and unit tests do not use plain wait() and notify()
+    def wait(self, timeout: float | None = None) -> bool: ...
+    def wait_for(
+        self, predicate: Callable[[], _T], timeout: float | None = None
+    ) -> _T: ...
+    def notify(self, n: int = 1) -> None: ...
+    def notify_all(self) -> None: ...
+
+@type_check_only
+class _cached_wrapper(Generic[_P, _R]):
+    __wrapped__: Callable[_P, _R]
+    __name__: str
+    __doc__: str | None
+    cache: MutableMapping[Any, Any] | None
+    cache_key: Callable[..., Any] = ...
+    cache_lock: AbstractContextManager[Any] | None = None
+    cache_condition: _AbstractCondition | None = None
+    def __call__(self, /, *args: _P.args, **kwargs: _P.kwargs) -> _R: ...
+    def cache_clear(self) -> None: ...
+
+@type_check_only
+class _cached_wrapper_info(_cached_wrapper[_P, _R]):
+    def cache_info(self) -> _CacheInfo: ...
+
+@overload
+def cached(
+    cache: MutableMapping[_KT, Any] | None,
+    key: Callable[..., _KT] = ...,
+    lock: AbstractContextManager[Any] | None = None,
+    condition: _AbstractCondition | None = None,
+    info: Literal[False] = ...,
+) -> Callable[[Callable[_P, _R]], _cached_wrapper[_P, _R]]: ...
+@overload
+def cached(
+    cache: MutableMapping[_KT, Any] | None,
+    key: Callable[..., _KT] = ...,
+    lock: AbstractContextManager[Any] | None = None,
+    condition: _AbstractCondition | None = None,
+    *,
+    info: Literal[True],
+) -> Callable[[Callable[_P, _R]], _cached_wrapper_info[_P, _R]]: ...
+@overload
+def cached(
+    cache: MutableMapping[_KT, Any] | None,
+    key: Callable[..., _KT],
+    lock: AbstractContextManager[Any] | None,
+    condition: _AbstractCondition | None,
+    info: Literal[True],
+) -> Callable[[Callable[_P, _R]], _cached_wrapper_info[_P, _R]]: ...
+
+@type_check_only
+class _cachedmethod_wrapper(Generic[_P, _R]):
+    __wrapped__: Callable[Concatenate[Any, _P], _R]
+    __name__: str
+    __doc__: str | None
+    cache: MutableMapping[Any, Any]
+    cache_key: Callable[..., Any] = ...
+    cache_lock: AbstractContextManager[Any] | None = None
+    cache_condition: _AbstractCondition | None = None
+    def __set_name__(self, owner: type, name: str) -> None: ...
+    def __get__(
+        self, obj: Any, objtype: type | None = None
+    ) -> _cachedmethod_wrapper[_P, _R]: ...
+    def __call__(self, /, *args: _P.args, **kwargs: _P.kwargs) -> _R: ...
+    def cache_clear(self) -> None: ...
+
+@type_check_only
+class _cachedmethod_wrapper_info(_cachedmethod_wrapper[_P, _R]):
+    def __get__(
+        self, obj: Any, objtype: type | None = None
+    ) -> _cachedmethod_wrapper_info[_P, _R]: ...
+    def cache_info(self) -> _CacheInfo: ...
+
+@overload
+def cachedmethod(
+    cache: Callable[[Any], MutableMapping[_KT, Any]],
+    key: Callable[..., _KT] = ...,
+    lock: Callable[[Any], AbstractContextManager[Any]] | None = None,
+    condition: Callable[[Any], _AbstractCondition] | None = None,
+    info: Literal[False] = ...,
+) -> Callable[[Callable[Concatenate[Any, _P], _R]], _cachedmethod_wrapper[_P, _R]]: ...
+@overload
+def cachedmethod(
+    cache: Callable[[Any], MutableMapping[_KT, Any]],
+    key: Callable[..., _KT] = ...,
+    lock: Callable[[Any], AbstractContextManager[Any]] | None = None,
+    condition: Callable[[Any], _AbstractCondition] | None = None,
+    *,
+    info: Literal[True],
+) -> Callable[
+    [Callable[Concatenate[Any, _P], _R]], _cachedmethod_wrapper_info[_P, _R]
+]: ...
+@overload
+def cachedmethod(
+    cache: Callable[[Any], MutableMapping[_KT, Any]],
+    key: Callable[..., _KT],
+    lock: Callable[[Any], AbstractContextManager[Any]] | None,
+    condition: Callable[[Any], _AbstractCondition] | None,
+    info: Literal[True],
+) -> Callable[
+    [Callable[Concatenate[Any, _P], _R]], _cachedmethod_wrapper_info[_P, _R]
+]: ...

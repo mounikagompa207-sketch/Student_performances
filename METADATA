@@ -1,60 +1,78 @@
-Metadata-Version: 2.3
-Name: blinker
-Version: 1.9.0
-Summary: Fast, simple object-to-object and broadcast signaling
-Author: Jason Kirtland
-Maintainer-email: Pallets Ecosystem <contact@palletsprojects.com>
-Requires-Python: >=3.9
-Description-Content-Type: text/markdown
+Metadata-Version: 2.4
+Name: certifi
+Version: 2026.6.17
+Summary: Python package for providing Mozilla's CA Bundle.
+Home-page: https://github.com/certifi/python-certifi
+Author: Kenneth Reitz
+Author-email: me@kennethreitz.com
+License: MPL-2.0
+Project-URL: Source, https://github.com/certifi/python-certifi
 Classifier: Development Status :: 5 - Production/Stable
-Classifier: License :: OSI Approved :: MIT License
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)
+Classifier: Natural Language :: English
 Classifier: Programming Language :: Python
-Classifier: Typing :: Typed
-Project-URL: Chat, https://discord.gg/pallets
-Project-URL: Documentation, https://blinker.readthedocs.io
-Project-URL: Source, https://github.com/pallets-eco/blinker/
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Requires-Python: >=3.7
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: project-url
+Dynamic: requires-python
+Dynamic: summary
 
-# Blinker
+Certifi: Python SSL Certificates
+================================
 
-Blinker provides a fast dispatching system that allows any number of
-interested parties to subscribe to events, or "signals".
+Certifi provides Mozilla's carefully curated collection of Root Certificates for
+validating the trustworthiness of SSL certificates while verifying the identity
+of TLS hosts. It has been extracted from the `Requests`_ project.
 
+Installation
+------------
 
-## Pallets Community Ecosystem
+``certifi`` is available on PyPI. Simply install it with ``pip``::
 
-> [!IMPORTANT]\
-> This project is part of the Pallets Community Ecosystem. Pallets is the open
-> source organization that maintains Flask; Pallets-Eco enables community
-> maintenance of related projects. If you are interested in helping maintain
-> this project, please reach out on [the Pallets Discord server][discord].
->
-> [discord]: https://discord.gg/pallets
+    $ pip install certifi
 
+Usage
+-----
 
-## Example
+To reference the installed certificate authority (CA) bundle, you can use the
+built-in function::
 
-Signal receivers can subscribe to specific senders or receive signals
-sent by any sender.
+    >>> import certifi
 
-```pycon
->>> from blinker import signal
->>> started = signal('round-started')
->>> def each(round):
-...     print(f"Round {round}")
-...
->>> started.connect(each)
+    >>> certifi.where()
+    '/usr/local/lib/python3.7/site-packages/certifi/cacert.pem'
 
->>> def round_two(round):
-...     print("This is round two.")
-...
->>> started.connect(round_two, sender=2)
+Or from the command line::
 
->>> for round in range(1, 4):
-...     started.send(round)
-...
-Round 1!
-Round 2!
-This is round two.
-Round 3!
-```
+    $ python -m certifi
+    /usr/local/lib/python3.7/site-packages/certifi/cacert.pem
 
+Enjoy!
+
+.. _`Requests`: https://requests.readthedocs.io/en/latest/
+
+Addition/Removal of Certificates
+--------------------------------
+
+Certifi does not support any addition/removal or other modification of the
+CA trust store content. This project is intended to provide a reliable and
+highly portable root of trust to python deployments. Look to upstream projects
+for methods to use alternate trust.
